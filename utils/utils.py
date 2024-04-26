@@ -51,7 +51,7 @@ def labels_to_class_weights(labels, nc=80):
         return torch.Tensor()
 
     labels = np.concatenate(labels, 0)  # labels.shape = (866643, 5) for COCO
-    classes = labels[:, 0].astype(np.int)  # labels = [class xywh]
+    classes = labels[:, 0].astype(np.int32)  # labels = [class xywh]
     weights = np.bincount(classes, minlength=nc)  # occurences per class
 
     # Prepend gridpoint count (for uCE trianing)
@@ -67,7 +67,7 @@ def labels_to_class_weights(labels, nc=80):
 def labels_to_image_weights(labels, nc=80, class_weights=np.ones(80)):
     # Produces image weights based on class mAPs
     n = len(labels)
-    class_counts = np.array([np.bincount(labels[i][:, 0].astype(np.int), minlength=nc) for i in range(n)])
+    class_counts = np.array([np.bincount(labels[i][:, 0].astype(np.int32), minlength=nc) for i in range(n)])
     image_weights = (class_weights.reshape(1, nc) * class_counts).sum(1)
     # index = random.choices(range(n), weights=image_weights, k=1)  # weight image sample
     return image_weights
@@ -469,6 +469,8 @@ def build_targets(p, targets, model):
             # reject anchors below iou_thres (OPTIONAL, increases P, lowers R)
             if reject:
                 j = iou.view(-1) > model.hyp['iou_t']  # iou threshold hyperparameter
+                t = t.to(targets.device)
+                a = a.to(targets.device)
                 t, a = t[j], a[j]
 
         # Indices
@@ -871,13 +873,13 @@ def plot_images(imgs, targets, paths=None, fname='images.png'):
     fig = plt.figure(figsize=(10, 10))
     bs, _, h, w = imgs.shape  # batch size, _, height, width
     bs = min(bs, 16)  # limit plot to 16 images
-    ns = np.ceil(bs ** 0.5)  # number of subplots
+    ns = int(np.ceil(bs ** 0.5))  # number of subplots
 
     for i in range(bs):
         boxes = xywh2xyxy(targets[targets[:, 0] == i, 2:6]).T
         boxes[[0, 2]] *= w
         boxes[[1, 3]] *= h
-        plt.subplot(ns, ns, i + 1).imshow(imgs[i].transpose(1, 2, 0))
+        plt.subplot(int(ns), int(ns), i + 1).imshow(imgs[i].transpose(1, 2, 0))
         plt.plot(boxes[[0, 2, 2, 0, 0]], boxes[[1, 1, 3, 3, 1]], '.-')
         plt.axis('off')
         if paths is not None:
@@ -988,10 +990,18 @@ def plot_results(start=0, stop=0, bucket='', id=()):  # from utils.utils import 
                 ax[i].plot(x, y, marker='.', label=Path(f).stem, linewidth=2, markersize=8)
                 ax[i].set_title(s[i])
                 if i in [5, 6, 7]:  # share train and val loss y axes
-                    ax[i].get_shared_y_axes().join(ax[i], ax[i - 5])
-        except:
+                    ###
+                    # ax1.get_shared_y_axes().join(ax2,ax3)
+                    # ax1.sharey(ax2)
+                    # ax2.sharey(ax3)
+                    # ###
+                    # ax[i].get_shared_y_axes().join(ax[i], ax[i - 5])
+                    ax[i].sharex(ax[i])
+                    ax[i].sharey(ax[i-5])
+        except RuntimeError as error:
             print('Warning: Plotting error for %s, skipping file' % f)
-
+            print(error)
+    
     fig.tight_layout()
     ax[1].legend()
     fig.savefig('results.png', dpi=200)

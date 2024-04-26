@@ -1,0 +1,9 @@
+# Compiled python
+*.pyc
+*.pyd
+
+# IPython notebook checkpoints
+*.ipynb_checkpoints
+
+# Skip the weights
+*.pt
